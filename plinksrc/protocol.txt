@@ -161,19 +161,31 @@ Low-level signaling
 ===================
 
 The ponylink protocol does not need to recover a bit clock on the recieving end.
-Instead a sequence of identical bits (a 0-pulse or 1-pulse) is transformed by
-the sender to a pulse of a different length that can always be correctly
-identified by the reciever. The tool "timings.py" is used to create the
-transmit and sampling configuration for a given clock frequency and serdes
-width.
+Instead of transmitting individual bits, the sender looks at sequences of identical
+bits (i.e. 0-pulses and 1-pulses). The 8b10b encoding guarantees that there are
+never more than 5 identical bits in a sequence.
 
-Notes:
- - this scheme works best if different clock frequencies are used for the
-   master and slave core.
- - The 8b10b encoding guarantees that there are never more than 5 identical
-   bits in a sequence.
+The tool "timings.py" first determines the shortest pulse that the sender can
+produce that is guaranteed to be detected by the reciever. I.e. the shortest
+pulse the sender can produce so that the reciever samples the pulse at least
+once. Lets call this pulse a type-1 pulse.
 
-For example the following is the configuration used for a master running at a
+Next it determines the shortes pulse that the sender can produce that is
+guaranteed to be sampled more often by the reciever that a type-1 pulse can
+every be sampled by the reciever. This is a type-2 pulse, and so on.
+
+The sender encodes a 1 bit wide pulse of 8b10b data as type-1 pulse, a 2 bit
+wide pulse as type-2 pulse, and so on.
+
+The reciever then samples the data wire, determines the length of each pulse in
+number of samples, and converts that back to a pulse of the right length in the
+8b10b data stream.
+
+This scheme works best if different clock frequencies are used for the master
+and slave core. It is recommended to play with different parameter values for
+timings.py to explore this space.
+
+For example, the following is the configuration used for a master running at a
 250 MHz clock and using a 4-bit SERDES (1 GS/s = 1ns), a slave with a 100 MHz
 clock using a 2 bit SERDES (200 MS/s = 5ns) and a maximal jitter on 0.5 ns:
 
@@ -224,4 +236,15 @@ clock using a 2 bit SERDES (200 MS/s = 5ns) and a maximal jitter on 0.5 ns:
 	** CORE CONFIGURATION **
 	.MASTER_TIMINGS(80'h2e241a100618130e0904),
 	.SLAVE_TIMINGS(80'h05040302010907050301)
+
+Lets look for example at a 3-bit wide pulse in the 8b10b data sent from the
+master to the slave. As can be seen in the "transmit timings" line produced for
+the master->slave direction, this would be encoded as a 26 (master) samples
+wide pulse on the data line. On the slave this would be received as a pulse
+that is 5 or 6 samples wide, which can be uniquely identified as a pulse that
+is 3 data bits wide.
+
+Notice that in this case the slave samples with 200.00 MHz, but can receive
+data at 135.27 MBit/s. Therefore this encoding scheme requires the slave to do
+less than 2x oversampling in this case.
 
