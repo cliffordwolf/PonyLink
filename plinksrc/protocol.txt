@@ -1,0 +1,227 @@
+
+Protocol and IP Internals
+=========================
+
+The folowing sections describe the protocol internals and how the IP implements
+the protocol.
+
+
+GPIO Port
+---------
+
+The GPIO port provide 8 inputs and 8 output on each side. This interface is
+asynchonous. I.e. it should only be used for slowly changing signals. A stall
+in the AXIS interfaces will not cause GPIO status updates to be blocked from
+being transmitted over the link.
+
+
+AXIS Input and Output
+---------------------
+
+PonyLink provides a pair of AXIS (AXI Stream) interfaces for data transfers from
+the Master to the Slave and a pair of AXIS interfaces for the other direction. Both
+directions feature the following AXIS signals:
+
+	TDATA, TUSER, TLAST, TVALID, TREADY
+
+Each direction has independent TDATA_WIDTH and TUSER_WIDTH. Internally the
+TDATA_WIDTH and TUSER_WIDTH are extended to a multiple of 8 bits.
+
+The best performance can be archieved if TDATA_WIDTH and TUSER_WIDTH
+are both less or equal 8 bits.
+
+The encoding algorithm is most efficient if the TUSER bits only toggle
+infrequently. It is recommended to move all frequently toggling bits from
+TUSER to TDATA (and all infrequently toggling bits from TDATA to TUSER)
+for best efficiency.
+
+
+Pack and Unpack
+---------------
+
+The packer transforms the stream from the input AXIS interface into a stream of
+8b/10b symbols (8 bit data words and the occational control symbol, encoded as
+9 bit words with the MSB cleared for data words). The unpacker reverts this
+process.
+
+For packing the TDATA and TUSER widths are padded to a multiple of 8 bits.
+The data is sent LSB first. The following control symbols are used:
+
+	0x11c (K.28.0) -- sync
+
+		This paket indicates the start of a TDATA word and is
+		inserted about once every 4k symbols. It also resets the
+		RNG used for scrambling. The following four bytes are a
+		seed value for the RNG. 
+
+	0x15c (K.28.2) -- set TUSER
+
+		The following bytes contain a new value for the TUSER
+		field. The new TUSER field is used for all subsequent
+		words until a new TUSER value is transmitted.
+
+	0x17c (K.28.3) -- set TLAST
+
+		Set the TLAST bit in this cycle.
+
+
+Scramble and Unscramble
+-----------------------
+
+The scrambler is using a pseudo RNG to create a stream of 8 bit words. Whenever
+a non-control symbol is passed through the scrambler, it is XOR-combined with
+the next word from the RNG.
+
+The unscrambler is using a matched RNG to recover the original data. A link
+reset event will reset the RNGs in all scramble and unscramble units.
+
+TBD: The exact properties of the RNG are unspecified at this moment.
+
+
+TX/RX Engine
+------------
+
+All bus activity is initiated by the master side of the link. One transfer
+consits of one packet of variable length being sent from the master to the
+slave, and one response packet of variable length being sent from the slave
+back to the master. Both packet follow the same format:
+
+	1. Preamble
+		the byte 0xb5 followed by the 0x1fc (K.28.7) control
+		symbol (K.28.7 is a comma symbol), followed by 0x9e for
+		packets from the master to the slave, or 0x74 for
+		packets from the slave to the master.
+
+		The 8b10b running disparity is initialized to -1.
+
+	2. Sequence control
+		the sequence-id of the last payload symbol recieved from the
+		peer, followed by the sequence-id of the first word in the
+		payload part of this packet.
+
+	3. Payload
+		Up to 64 payload symbols
+
+	4. Optional GPIO update
+		If there has been a change to the GPIO input bits on this
+		side, insert the control symbol 0x19c (K.28.4) followed by
+		an (unscrambled) data symbol representing the new GPIO
+		input values.
+
+	5. End Symbol and Checksum
+		Finally the 0x1bc (K.28.5) control symbol followed by a
+		32 bit checksum (CRC-32) followed by at least one additional
+		transition on the signal line.
+
+  Sequence IDs:
+
+Each payload word has a (ascending) 8 bit sequence number assigned to it. This
+sequence numbers are used for resending data after a transmission error and for
+flow control. The sender will only discard data from its send buffer once it
+recevied an acknowledgement from the reciever for the data (first word in
+sequence control). Data that has not been acknowledged will be resent. Data
+that has been recieved for the second time will be ignored.
+
+  Error handling:
+
+When a 0x1fc (K.28.7) control symbol is recieved then all previously recieved
+data that presumably belonged to a packet is discarded. When the checksum for a
+packet shows a transmission error (or there is a 8b10b decode error, or a 8b10b
+disparity error or there was no end symbol within the expected region) then the
+packet is discarded (as if it was never recieved).
+
+The master will wait for at least the maximum packet size for a preamble from
+the slave after the master packet has been sent. If no preamble from the slave
+has been recieved until then, the master will resend his packet.
+
+If the slave is physically capable of detecting a collision on the transmission
+media, then a collision will cause the slave to stop sending data.
+
+  Reset event:
+
+The master can send a reset sequence to the slave to trigger a slave reset
+(automatically done when the master is reset using resetn). The slave
+responds with a modified reset sequence. The master core keeps sending the
+reset signal to the slave until it recieves the proper response.
+
+The reset sequence is: the byte 0xb5 followed by the 0x1fc (K.28.7) control
+symbol, followed by four times the control symbol 0x1fd (K.29.7) or 0x1fe
+(K.30.7) for the master or slave respectively, followed by the data bytes
+4, 5, 6, ..., 13, 14. The 8b10b running disparity is initialized to -1.
+
+  Spread-spectrum idle behavior:
+
+If the master sends less than 64 payload symbols to the slave, and the slave
+sends less than 64 payload symbols to the master, then the master will wait a
+random number of bit times (up to 64) before sending the next packet to the
+slave.
+
+
+Low-level signaling
+===================
+
+The ponylink protocol does not need to recover a bit clock on the recieving end.
+Instead a sequence of identical bits (a 0-pulse or 1-pulse) is transformed by
+the sender to a pulse of a different length that can always be correctly
+identified by the reciever. The tool "timings.py" is used to create the
+transmit and sampling configuration for a given clock frequency and serdes
+width.
+
+Notes:
+ - this scheme works best if different clock frequencies are used for the
+   master and slave core.
+ - The 8b10b encoding guarantees that there are never more than 5 identical
+   bits in a sequence.
+
+For example the following is the configuration used for a master running at a
+250 MHz clock and using a 4-bit SERDES (1 GS/s = 1ns), a slave with a 100 MHz
+clock using a 2 bit SERDES (200 MS/s = 5ns) and a maximal jitter on 0.5 ns:
+
+	$ python timings.py 1 5 0.5 0.5
+
+	** TIMING SPECIFICATION SUMMARY **
+	    Master clock: 1.000 ns (1000.00 MHz)
+	    Slave clock: 5.000 ns (200.00 MHz)
+	    Master->Slave pulse jitter: 0.500 ns
+	    Slave->Master pulse jitter: 0.500 ns
+
+	** FINDING TIMING CONFIG FOR DIRECTION 'MASTER -> SLAVE' **
+	Timing for transmit_period=1.000 ns (1000.00 MHz) and sample_period=5.000 ns (200.00 MHz)
+	    transmit timings: [6, 16, 26, 36, 46]
+	     1 -  2 identical samples  -> 1 bit
+	     3 -  4 identical samples  -> 2 bits
+	     5 -  6 identical samples  -> 3 bits
+	     7 -  8 identical samples  -> 4 bits
+	     9 - 10 identical samples  -> 5 bits
+	Bitrate vs. pulse length:
+	    @1: 166.67 MBit/s  (expected 32%)
+	    @2: 125.00 MBit/s  (expected 36%)
+	    @3: 115.38 MBit/s  (expected 21%)
+	    @4: 111.11 MBit/s  (expected  7%)
+	    @5: 108.70 MBit/s  (expected  1%)
+	    ==> 135.27 MBit/s  (expected avg.)
+	TRANSMIT TIMINGS: [6, 16, 26, 36, 46]
+	SAMPLE TIMINGS: [1, 3, 5, 7, 9]
+
+	** FINDING TIMING CONFIG FOR DIRECTION 'SLAVE -> MASTER' **
+	Timing for transmit_period=5.000 ns (200.00 MHz) and sample_period=1.000 ns (1000.00 MHz)
+	    transmit timings: [1, 2, 3, 4, 5]
+	     4 -  6 identical samples  -> 1 bit
+	     9 - 11 identical samples  -> 2 bits
+	    14 - 16 identical samples  -> 3 bits
+	    19 - 21 identical samples  -> 4 bits
+	    24 - 26 identical samples  -> 5 bits
+	Bitrate vs. pulse length:
+	    @1: 200.00 MBit/s  (expected 32%)
+	    @2: 200.00 MBit/s  (expected 36%)
+	    @3: 200.00 MBit/s  (expected 21%)
+	    @4: 200.00 MBit/s  (expected  7%)
+	    @5: 200.00 MBit/s  (expected  1%)
+	    ==> 200.00 MBit/s  (expected avg.)
+	TRANSMIT TIMINGS: [1, 2, 3, 4, 5]
+	SAMPLE TIMINGS: [4, 9, 14, 19, 24]
+
+	** CORE CONFIGURATION **
+	.MASTER_TIMINGS(80'h2e241a100618130e0904),
+	.SLAVE_TIMINGS(80'h05040302010907050301)
+

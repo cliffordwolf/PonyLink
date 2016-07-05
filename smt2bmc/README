@@ -1,0 +1,17 @@
+
+Formal proofs using SMT2 solvers (Yices, Z3, CVC4, MathSAT, etc.)
+
+
+chip
+----
+
+Post-synthesis proofs from lattice ice40 bitstream files. Make changes as
+neccessary to perform a proof. (Used only for hardcore debugging sessions.)
+
+
+slave_send_length
+-----------------
+
+Proves that when the slave is sending, it will ultimately stop sending after at
+least 800 cycles (for the most simple [1 2 3 4 5] send timings).
+

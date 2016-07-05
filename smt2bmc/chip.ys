@@ -1,0 +1,10 @@
+
+read_verilog chip.v
+read_verilog -defer +/ice40/cells_sim.v
+
+hierarchy -top chip
+proc; opt; flatten; opt
+memory -nomap -nordff; opt;
+techmap; opt -fast; abc; opt -fast
+write_smt2 -bv -mem chip.smt2
+

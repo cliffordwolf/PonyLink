@@ -1,0 +1,18 @@
+
+read_verilog ../plinksrc/ponylink_slave.v
+read_verilog ../plinksrc/ponylink_master.v
+read_verilog ../plinksrc/ponylink_pack.v
+read_verilog ../plinksrc/ponylink_txrx.v
+read_verilog ../plinksrc/ponylink_8b10b.v
+read_verilog ../plinksrc/ponylink_crc32.v
+
+read_verilog -formal reset_sequence.v
+
+hierarchy -check -top main
+setattr -set keep 1 main/w:\*
+
+proc; opt; flatten; opt
+memory -nomap -nordff; opt
+# techmap; opt -fast; abc; opt -fast
+write_smt2 -bv -mem -regs reset_sequence.smt2
+

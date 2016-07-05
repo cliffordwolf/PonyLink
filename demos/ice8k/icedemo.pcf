@@ -1,0 +1,29 @@
+set_io led_0 B5
+set_io led_1 B4
+set_io led_2 A2
+set_io led_3 A1
+set_io led_4 C5
+set_io led_5 C4
+set_io led_6 B3
+set_io led_7 C3
+
+# on-board oscillator (12.0 MHz)
+set_io clk_pin J3
+
+set_io master_io F15
+set_io slave_io  G15
+
+set_io master_en  T1
+set_io master_out R2
+set_io master_in  R3
+
+set_io master_rst T2
+set_io master_clk R4
+
+set_io slave_en  B1
+set_io slave_out C1
+set_io slave_in  D1
+
+set_io slave_rst B2
+set_io slave_clk D2
+

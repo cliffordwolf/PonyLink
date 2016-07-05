@@ -1,0 +1,20 @@
+
+read_verilog ../plinksrc/ponylink_slave.v
+read_verilog ../plinksrc/ponylink_pack.v
+read_verilog ../plinksrc/ponylink_txrx.v
+read_verilog ../plinksrc/ponylink_8b10b.v
+read_verilog ../plinksrc/ponylink_crc32.v
+
+read_verilog -formal slave_send_length.v
+
+hierarchy -top main
+setattr -set keep 1 main/w:\*
+setattr -set keep 1 *ponylink_txrx/w:\*
+setattr -set keep 1 *ponylink_txrx_encode*/w:\*
+setattr -set keep 1 *ponylink_txrx_decode*/w:\*
+
+proc; opt; flatten; opt
+memory -nomap -nordff; opt
+# techmap; opt -fast; abc; opt -fast
+write_smt2 -bv -mem -regs slave_send_length.smt2
+

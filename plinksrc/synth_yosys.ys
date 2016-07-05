@@ -1,0 +1,12 @@
+
+# yosys -l synth_yosys.log synth_yosys.ys
+
+read_verilog ponylink_master.v
+read_verilog ponylink_slave.v
+read_verilog ponylink_pack.v
+read_verilog ponylink_txrx.v
+read_verilog ponylink_8b10b.v
+read_verilog ponylink_crc32.v
+
+synth_xilinx -top ponylink_master
+
