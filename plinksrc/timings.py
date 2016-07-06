@@ -216,6 +216,46 @@ if __name__ == "__main__":
                 solver.results["M2S_ST"][4], solver.results["M2S_ST"][3], solver.results["M2S_ST"][2], solver.results["M2S_ST"][1], solver.results["M2S_ST"][0]))
         print()
 
+    elif len(sys.argv) == 2 and sys.argv[1] == "-plot":
+        x_slave_period = list()
+        y_m2s_bitrate = list()
+        y_s2m_bitrate = list()
+
+        for k in range(50, 200):
+            master_period = 100.0
+            slave_period = k
+            m2s_pulse_jitter = 0.5
+            s2m_pulse_jitter = 0.5
+
+            solver = TimingSolver()
+            solver.find_config(0, master_period, slave_period, m2s_pulse_jitter);
+            solver.find_config(1, slave_period, master_period, s2m_pulse_jitter);
+
+            x_slave_period.append(slave_period)
+            y_m2s_bitrate.append(solver.results["M2S_BW"])
+            y_s2m_bitrate.append(solver.results["S2M_BW"])
+
+        from matplotlib import pyplot as plt
+
+        x_slave_period = np.array(x_slave_period)
+        y_m2s_bitrate = np.array(y_m2s_bitrate)
+        y_s2m_bitrate = np.array(y_s2m_bitrate)
+
+        plt.figure(figsize=(10, 5))
+        plt.title("Bandwidth, normalized using master clock frequency")
+        plt.plot(x_slave_period / 100, y_m2s_bitrate / 10, label="master -> slave")
+        plt.plot(x_slave_period / 100, y_s2m_bitrate / 10, label="slave -> master")
+        plt.ylabel("Bandwidth (MBit/s / MHz master clock)")
+        plt.xlabel("Ratio of slave clock period to master clock period " +
+                   "(<1.0 = slave clock is faster than master clock)")
+        plt.semilogx()
+        xticks = [0.5, 0.7, 1.0, 1.5, 2.0]
+        plt.xticks(xticks, xticks)
+        plt.xlim(0.5, 2.0)
+        plt.ylim(0, 1.2)
+        plt.legend()
+        plt.show()
+
     else:
         sys.exit(
             ('Usage: %s <master-period-ns> <slave-period-ns> \\\n' % sys.argv[0]) +

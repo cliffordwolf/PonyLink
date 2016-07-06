@@ -7,9 +7,16 @@ signal wire between the two chips. Naturally this wire is used in a half-duplex
 fashion. For faster link speeds the use of a LVDS pair is recommended. The
 cores are tested on Xilinx Series 7 and Lattice iCE40 FPGAs.
 
-PonyLink handles all the low-level tasks, including detection of failed
-transfers and automatic resend. On the chip-facing side it provides a transmit
-and receive AXI Stream as well as 8 GPIO inputs and 8 GPIO outputs.
+On the chip-facing side PonyLink provides a transmit and receive AXI Stream as
+well as 8 GPIO inputs and 8 GPIO outputs. PonyLink handles all the low-level
+tasks, including flow control and detection of failed transfers and automatic
+resend.
+
+The main features of the core are that it only requires one single data line
+between the chips and that it can operate on resonable data rates (compared to
+the clock rates of the clocks driving the cores, usually over 0.5 MBit/s per
+MHz). This comes at a high resource cost, e.g. on iCE40 FPGAs (4-input LUTs)
+an instance of PonyLink uses about 1700 LUTs.
 
 Features:
 ---------
@@ -19,6 +26,7 @@ Features:
 - support for any AXIS TDATA and TUSER width and TLAST signal
 - bi-directional communication over a single data line (usually LVDS)
 - works without a dedicated hardware block for clock recovery
+- dc-free signaling, allowing for caps or magnetics in the link
 - embedded clock and control signals (using 8b10b encoding)
 - support for different data rates for each direction
 - 8 asynchonous GPIO pins in each direction
@@ -157,6 +165,9 @@ is the period for the fast side of the serdes. The 3rd and 4th parameter specify
 the maximum expected edge-to-edge jitter for pulses transmitted from the master
 to the slave and vice versa respectively. Increase the values for the 3rd and 4th
 parameters if transmission errors are detected.
+
+Note that PonyLink performs best if the master and slave clock rates are *not*
+integer multiples of each other.
 
 
 Why the obscure name?
