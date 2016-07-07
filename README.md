@@ -18,6 +18,10 @@ the clock rates of the clocks driving the cores, usually over 0.5 MBit/s per
 MHz). This comes at a high resource cost, e.g. on iCE40 FPGAs (4-input LUTs)
 an instance of PonyLink uses about 1700 LUTs.
 
+If you can afford more than one signal line, or don't need the high bandwidth,
+then the resource cost for this core might be a bit high compared to possible
+other solutions.
+
 Features:
 ---------
 
@@ -31,6 +35,14 @@ Features:
 - support for different data rates for each direction
 - 8 asynchonous GPIO pins in each direction
 - spread EMI spectrum via data scrambling
+
+License:
+--------
+
+The PonyLink core is licensed using permissive licenses. Most of it
+is covered by the ISC license. The [8b10b encoder and decoder](plinksrc/ponylink_8b10b.v)
+used in the project and the [CRC32 generator](plinksrc/ponylink_crc32.v)
+are licensed under different, but compatible permissive licenses.
 
 Master and Slave Roles and Link Reset:
 --------------------------------------
